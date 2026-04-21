@@ -1,14 +1,14 @@
 {
     "name": "bankcore",
     "version": "1.0.0",
-    "description": "Multi-user banking system with ACID transactions",
+    "description": "Multi-user banking system",
     "main": "app.js",
     "scripts": {
         "start": "node app.js"
     },
     "dependencies": {
         "express": "^4.18.2",
-        "mysql2": "^3.6.0",
-        "express-session": "^1.17.3"
+        "express-session": "^1.17.3",
+        "pg": "^8.11.3"
     }
 }

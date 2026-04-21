@@ -1,7 +1,7 @@
 const express = require('express');
-const mysql = require('mysql2');
 const session = require('express-session');
 const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
 
@@ -16,20 +16,89 @@ app.use(session({
     cookie: { maxAge: 24 * 60 * 60 * 1000 }
 }));
 
-// Database connection
-const db = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'banknew',
-    connectionLimit: 10
+// ============ DATABASE CONNECTION ============
+const db = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
 });
 
+// ============ AUTO-CREATE TABLES ============
+async function initializeDatabase() {
+    try {
+        // Create users table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                full_name VARCHAR(100),
+                role VARCHAR(20) DEFAULT 'customer',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
+        // Create accounts table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS accounts (
+                id SERIAL PRIMARY KEY,
+                user_id INT UNIQUE NOT NULL,
+                account_number VARCHAR(20) UNIQUE NOT NULL,
+                balance DECIMAL(15,2) DEFAULT 0.00,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+        `);
 
-// Database connection - UPDATE THESE VALUES!
+        // Create transactions table
+        await db.query(`
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                from_account VARCHAR(20),
+                to_account VARCHAR(20),
+                amount DECIMAL(15,2) NOT NULL,
+                type VARCHAR(30) NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
 
-console.log('✅ Database pool created');
+        // Check if users exist
+        const userCount = await db.query('SELECT COUNT(*) FROM users');
+        if (parseInt(userCount.rows[0].count) === 0) {
+            // Insert default users
+            await db.query(`
+                INSERT INTO users (username, password, full_name, role) VALUES
+                ('admin1', 'admin123', 'Bank Officer One', 'admin'),
+                ('admin2', 'admin123', 'Bank Officer Two', 'admin'),
+                ('john', '123456', 'John Doe', 'customer'),
+                ('sarah', '123456', 'Sarah Smith', 'customer'),
+                ('mike', '123456', 'Mike Johnson', 'customer'),
+                ('emma', '123456', 'Emma Wilson', 'customer')
+            `);
+            console.log('✅ Default users created');
+        }
+
+        // Check if accounts exist
+        const accountCount = await db.query('SELECT COUNT(*) FROM accounts');
+        if (parseInt(accountCount.rows[0].count) === 0) {
+            await db.query(`
+                INSERT INTO accounts (user_id, account_number, balance) VALUES
+                (3, 'ACC1001', 5000.00),
+                (4, 'ACC2001', 7500.00),
+                (5, 'ACC3001', 3200.00),
+                (6, 'ACC4001', 8800.00)
+            `);
+            console.log('✅ Default accounts created');
+        }
+
+        console.log('✅ Database initialized successfully!');
+    } catch (err) {
+        console.error('❌ Database initialization error:', err);
+    }
+}
+
+// Initialize database on startup
+initializeDatabase();
 
 // ============ ROUTES ============
 
@@ -51,34 +120,30 @@ app.get('/api/session', (req, res) => {
     }
 });
 
-// ⭐ LOGIN
-app.post('/api/login', (req, res) => {
+// Login
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
 
-    db.query('SELECT * FROM users WHERE username = ? AND password = ?',
-        [username, password],
-        (err, results) => {
-            if (err) {
-                return res.json({ success: false, message: 'Database error' });
-            }
+    try {
+        const result = await db.query(
+            'SELECT * FROM users WHERE username = $1 AND password = $2',
+            [username, password]
+        );
 
-            if (results.length > 0) {
-                const user = results[0];
-                req.session.userId = user.id;
-                req.session.username = user.username;
-                req.session.role = user.role;
-                req.session.fullName = user.full_name;
-
-                req.session.save(err => {
-                    if (err) {
-                        return res.json({ success: false, message: 'Session error' });
-                    }
-                    res.json({ success: true, role: user.role });
-                });
-            } else {
-                res.json({ success: false, message: 'Invalid credentials' });
-            }
-        });
+        if (result.rows.length > 0) {
+            const user = result.rows[0];
+            req.session.userId = user.id;
+            req.session.username = user.username;
+            req.session.role = user.role;
+            await req.session.save();
+            res.json({ success: true, role: user.role });
+        } else {
+            res.json({ success: false, message: 'Invalid credentials' });
+        }
+    } catch (err) {
+        console.error('Login error:', err);
+        res.json({ success: false, message: 'Database error' });
+    }
 });
 
 // Logout
@@ -88,31 +153,31 @@ app.post('/api/logout', (req, res) => {
 });
 
 // Get customer's account
-app.get('/api/my-account', (req, res) => {
+app.get('/api/my-account', async (req, res) => {
     if (!req.session.userId) {
         return res.json({ success: false, message: 'Not logged in' });
     }
 
-    db.query('SELECT * FROM accounts WHERE user_id = ?',
-        [req.session.userId],
-        (err, results) => {
-            if (err) {
-                return res.json({ success: false, message: 'Database error' });
-            }
+    try {
+        const result = await db.query(
+            'SELECT * FROM accounts WHERE user_id = $1',
+            [req.session.userId]
+        );
 
-            if (results.length > 0) {
-                // Ensure balance is a number
-                const account = results[0];
-                account.balance = parseFloat(account.balance);
-                res.json({ success: true, account: account });
-            } else {
-                res.json({ success: false, message: 'No account found' });
-            }
-        });
+        if (result.rows.length > 0) {
+            const account = result.rows[0];
+            account.balance = parseFloat(account.balance);
+            res.json({ success: true, account: account });
+        } else {
+            res.json({ success: false, message: 'No account found' });
+        }
+    } catch (err) {
+        res.json({ success: false, message: 'Database error' });
+    }
 });
 
-// ⭐ DEPOSIT - FIXED
-app.post('/api/deposit', (req, res) => {
+// Deposit
+app.post('/api/deposit', async (req, res) => {
     if (!req.session.userId) {
         return res.json({ success: false, message: 'Please login first' });
     }
@@ -124,70 +189,48 @@ app.post('/api/deposit', (req, res) => {
         return res.json({ success: false, message: 'Valid amount required' });
     }
 
-    db.getConnection((err, connection) => {
-        if (err) {
-            return res.json({ success: false, message: 'Connection error' });
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const accountResult = await client.query(
+            'SELECT id, account_number, balance FROM accounts WHERE user_id = $1 FOR UPDATE',
+            [req.session.userId]
+        );
+
+        if (accountResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Account not found' });
         }
 
-        connection.beginTransaction(err => {
-            if (err) {
-                connection.release();
-                return res.json({ success: false, message: 'Transaction error' });
-            }
+        const account = accountResult.rows[0];
+        const currentBalance = parseFloat(account.balance);
+        const newBalance = currentBalance + depositAmount;
 
-            connection.query(
-                'SELECT id, account_number, balance FROM accounts WHERE user_id = ? FOR UPDATE',
-                [req.session.userId],
-                (err, results) => {
-                    if (err || results.length === 0) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Account not found' });
-                        });
-                    }
+        await client.query(
+            'UPDATE accounts SET balance = $1 WHERE id = $2',
+            [newBalance, account.id]
+        );
 
-                    const account = results[0];
-                    const currentBalance = parseFloat(account.balance);
-                    const newBalance = currentBalance + depositAmount;
+        await client.query(
+            'INSERT INTO transactions (to_account, amount, type, description) VALUES ($1, $2, $3, $4)',
+            [account.account_number, depositAmount, 'DEPOSIT', 'Cash Deposit']
+        );
 
-                    connection.query(
-                        'UPDATE accounts SET balance = ? WHERE id = ?',
-                        [newBalance, account.id],
-                        (err) => {
-                            if (err) {
-                                return connection.rollback(() => {
-                                    connection.release();
-                                    res.json({ success: false, message: 'Deposit failed' });
-                                });
-                            }
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Deposit successful', newBalance });
 
-                            connection.query(
-                                'INSERT INTO transactions (to_account, amount, type, description) VALUES (?, ?, ?, ?)',
-                                [account.account_number, depositAmount, 'DEPOSIT', 'Cash Deposit'],
-                                (err) => {
-                                    if (err) {
-                                        return connection.rollback(() => {
-                                            connection.release();
-                                            res.json({ success: false, message: 'Log failed' });
-                                        });
-                                    }
-
-                                    connection.commit(err => {
-                                        connection.release();
-                                        if (err) {
-                                            return res.json({ success: false, message: 'Commit failed' });
-                                        }
-                                        res.json({ success: true, message: 'Deposit successful', newBalance });
-                                    });
-                                });
-                        });
-                });
-        });
-    });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.json({ success: false, message: 'Deposit failed' });
+    } finally {
+        client.release();
+    }
 });
 
-// ⭐ WITHDRAW - FIXED
-app.post('/api/withdraw', (req, res) => {
+// Withdraw
+app.post('/api/withdraw', async (req, res) => {
     if (!req.session.userId) {
         return res.json({ success: false, message: 'Please login first' });
     }
@@ -199,79 +242,54 @@ app.post('/api/withdraw', (req, res) => {
         return res.json({ success: false, message: 'Valid amount required' });
     }
 
-    db.getConnection((err, connection) => {
-        if (err) {
-            return res.json({ success: false, message: 'Connection error' });
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const accountResult = await client.query(
+            'SELECT id, account_number, balance FROM accounts WHERE user_id = $1 FOR UPDATE',
+            [req.session.userId]
+        );
+
+        if (accountResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Account not found' });
         }
 
-        connection.beginTransaction(err => {
-            if (err) {
-                connection.release();
-                return res.json({ success: false, message: 'Transaction error' });
-            }
+        const account = accountResult.rows[0];
+        const currentBalance = parseFloat(account.balance);
 
-            connection.query(
-                'SELECT id, account_number, balance FROM accounts WHERE user_id = ? FOR UPDATE',
-                [req.session.userId],
-                (err, results) => {
-                    if (err || results.length === 0) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Account not found' });
-                        });
-                    }
+        if (currentBalance < withdrawAmount) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Insufficient funds' });
+        }
 
-                    const account = results[0];
-                    const currentBalance = parseFloat(account.balance);
+        const newBalance = currentBalance - withdrawAmount;
 
-                    // FIXED: Proper balance check
-                    if (currentBalance < withdrawAmount) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Insufficient funds' });
-                        });
-                    }
+        await client.query(
+            'UPDATE accounts SET balance = $1 WHERE id = $2',
+            [newBalance, account.id]
+        );
 
-                    const newBalance = currentBalance - withdrawAmount;
+        await client.query(
+            'INSERT INTO transactions (from_account, amount, type, description) VALUES ($1, $2, $3, $4)',
+            [account.account_number, withdrawAmount, 'WITHDRAWAL', 'Cash Withdrawal']
+        );
 
-                    connection.query(
-                        'UPDATE accounts SET balance = ? WHERE id = ?',
-                        [newBalance, account.id],
-                        (err) => {
-                            if (err) {
-                                return connection.rollback(() => {
-                                    connection.release();
-                                    res.json({ success: false, message: 'Withdrawal failed' });
-                                });
-                            }
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Withdrawal successful', newBalance });
 
-                            connection.query(
-                                'INSERT INTO transactions (from_account, amount, type, description) VALUES (?, ?, ?, ?)',
-                                [account.account_number, withdrawAmount, 'WITHDRAWAL', 'Cash Withdrawal'],
-                                (err) => {
-                                    if (err) {
-                                        return connection.rollback(() => {
-                                            connection.release();
-                                            res.json({ success: false, message: 'Log failed' });
-                                        });
-                                    }
-
-                                    connection.commit(err => {
-                                        connection.release();
-                                        if (err) {
-                                            return res.json({ success: false, message: 'Commit failed' });
-                                        }
-                                        res.json({ success: true, message: 'Withdrawal successful', newBalance });
-                                    });
-                                });
-                        });
-                });
-        });
-    });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.json({ success: false, message: 'Withdrawal failed' });
+    } finally {
+        client.release();
+    }
 });
 
-// ⭐ CUSTOMER TRANSFER - FIXED
-app.post('/api/transfer', (req, res) => {
+// Transfer
+app.post('/api/transfer', async (req, res) => {
     if (!req.session.userId) {
         return res.json({ success: false, message: 'Please login first' });
     }
@@ -283,168 +301,123 @@ app.post('/api/transfer', (req, res) => {
         return res.json({ success: false, message: 'All fields required' });
     }
 
-    db.getConnection((err, connection) => {
-        if (err) {
-            return res.json({ success: false, message: 'Connection error' });
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const fromResult = await client.query(
+            'SELECT id, account_number, balance FROM accounts WHERE user_id = $1 FOR UPDATE',
+            [req.session.userId]
+        );
+
+        if (fromResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Your account not found' });
         }
 
-        connection.beginTransaction(err => {
-            if (err) {
-                connection.release();
-                return res.json({ success: false, message: 'Transaction error' });
-            }
+        const fromAccount = fromResult.rows[0];
+        const currentBalance = parseFloat(fromAccount.balance);
 
-            // Get sender's account
-            connection.query(
-                'SELECT id, account_number, balance FROM accounts WHERE user_id = ? FOR UPDATE',
-                [req.session.userId],
-                (err, results) => {
-                    if (err || results.length === 0) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Your account not found' });
-                        });
-                    }
+        if (fromAccount.account_number === toAccount) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Cannot transfer to same account' });
+        }
 
-                    const fromAccount = results[0];
-                    const currentBalance = parseFloat(fromAccount.balance);
+        if (currentBalance < transferAmount) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Insufficient funds' });
+        }
 
-                    // Check if sending to self
-                    if (fromAccount.account_number === toAccount) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Cannot transfer to same account' });
-                        });
-                    }
+        const toResult = await client.query(
+            'SELECT id, account_number, balance FROM accounts WHERE account_number = $1 FOR UPDATE',
+            [toAccount]
+        );
 
-                    // FIXED: Proper balance check
-                    if (currentBalance < transferAmount) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Insufficient funds' });
-                        });
-                    }
+        if (toResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Receiver account not found' });
+        }
 
-                    // Get receiver's account
-                    connection.query(
-                        'SELECT id, account_number, balance FROM accounts WHERE account_number = ? FOR UPDATE',
-                        [toAccount],
-                        (err, results) => {
-                            if (err || results.length === 0) {
-                                return connection.rollback(() => {
-                                    connection.release();
-                                    res.json({ success: false, message: 'Receiver account not found' });
-                                });
-                            }
+        const toAccountData = toResult.rows[0];
+        const receiverBalance = parseFloat(toAccountData.balance);
 
-                            const toAccountData = results[0];
-                            const receiverBalance = parseFloat(toAccountData.balance);
+        const newFromBalance = currentBalance - transferAmount;
+        const newToBalance = receiverBalance + transferAmount;
 
-                            const newFromBalance = currentBalance - transferAmount;
-                            const newToBalance = receiverBalance + transferAmount;
+        await client.query(
+            'UPDATE accounts SET balance = $1 WHERE id = $2',
+            [newFromBalance, fromAccount.id]
+        );
 
-                            // Update sender
-                            connection.query(
-                                'UPDATE accounts SET balance = ? WHERE id = ?',
-                                [newFromBalance, fromAccount.id],
-                                (err) => {
-                                    if (err) {
-                                        return connection.rollback(() => {
-                                            connection.release();
-                                            res.json({ success: false, message: 'Transfer failed' });
-                                        });
-                                    }
+        await client.query(
+            'UPDATE accounts SET balance = $1 WHERE id = $2',
+            [newToBalance, toAccountData.id]
+        );
 
-                                    // Update receiver
-                                    connection.query(
-                                        'UPDATE accounts SET balance = ? WHERE id = ?',
-                                        [newToBalance, toAccountData.id],
-                                        (err) => {
-                                            if (err) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    res.json({ success: false, message: 'Transfer failed' });
-                                                });
-                                            }
+        await client.query(
+            'INSERT INTO transactions (from_account, to_account, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
+            [fromAccount.account_number, toAccount, transferAmount, 'TRANSFER', description || 'Transfer']
+        );
 
-                                            // Log transaction
-                                            connection.query(
-                                                'INSERT INTO transactions (from_account, to_account, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-                                                [fromAccount.account_number, toAccount, transferAmount, 'TRANSFER', description || 'Transfer'],
-                                                (err) => {
-                                                    if (err) {
-                                                        return connection.rollback(() => {
-                                                            connection.release();
-                                                            res.json({ success: false, message: 'Log failed' });
-                                                        });
-                                                    }
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Transfer successful', newBalance: newFromBalance });
 
-                                                    connection.commit(err => {
-                                                        connection.release();
-                                                        if (err) {
-                                                            return res.json({ success: false, message: 'Commit failed' });
-                                                        }
-                                                        res.json({ success: true, message: 'Transfer successful', newBalance: newFromBalance });
-                                                    });
-                                                });
-                                        });
-                                });
-                        });
-                });
-        });
-    });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.json({ success: false, message: 'Transfer failed' });
+    } finally {
+        client.release();
+    }
 });
 
-// Get transaction history
-app.get('/api/transactions', (req, res) => {
+// Get transactions
+app.get('/api/transactions', async (req, res) => {
     if (!req.session.userId) {
         return res.json({ success: false });
     }
 
-    db.query(
-        `SELECT t.* FROM transactions t 
-         JOIN accounts a ON (t.from_account = a.account_number OR t.to_account = a.account_number)
-         WHERE a.user_id = ?
-         ORDER BY t.created_at DESC LIMIT 20`,
-        [req.session.userId],
-        (err, results) => {
-            if (err) {
-                return res.json({ success: false });
-            }
-            res.json({ success: true, transactions: results });
-        });
+    try {
+        const result = await db.query(
+            `SELECT t.* FROM transactions t 
+             JOIN accounts a ON (t.from_account = a.account_number OR t.to_account = a.account_number)
+             WHERE a.user_id = $1
+             ORDER BY t.created_at DESC LIMIT 20`,
+            [req.session.userId]
+        );
+        res.json({ success: true, transactions: result.rows });
+    } catch (err) {
+        res.json({ success: false });
+    }
 });
 
-// ============ ADMIN ROUTES ============
-
-// Get all customer accounts
-app.get('/api/admin/accounts', (req, res) => {
+// Admin: Get all accounts
+app.get('/api/admin/accounts', async (req, res) => {
     if (!req.session.userId || req.session.role !== 'admin') {
         return res.json({ success: false, message: 'Unauthorized' });
     }
 
-    db.query(
-        `SELECT a.*, u.username, u.full_name 
-         FROM accounts a 
-         JOIN users u ON a.user_id = u.id 
-         WHERE u.role = 'customer'
-         ORDER BY u.username`,
-        (err, results) => {
-            if (err) {
-                return res.json({ success: false });
-            }
+    try {
+        const result = await db.query(
+            `SELECT a.*, u.username, u.full_name 
+             FROM accounts a 
+             JOIN users u ON a.user_id = u.id 
+             WHERE u.role = 'customer'
+             ORDER BY u.username`
+        );
 
-            // Ensure balances are numbers
-            results.forEach(acc => {
-                acc.balance = parseFloat(acc.balance);
-            });
-
-            res.json({ success: true, accounts: results });
+        result.rows.forEach(acc => {
+            acc.balance = parseFloat(acc.balance);
         });
+
+        res.json({ success: true, accounts: result.rows });
+    } catch (err) {
+        res.json({ success: false });
+    }
 });
 
-// ⭐ ADMIN TRANSFER - FIXED
-app.post('/api/admin/transfer', (req, res) => {
+// Admin transfer
+app.post('/api/admin/transfer', async (req, res) => {
     if (!req.session.userId || req.session.role !== 'admin') {
         return res.json({ success: false, message: 'Unauthorized' });
     }
@@ -460,112 +433,66 @@ app.post('/api/admin/transfer', (req, res) => {
         return res.json({ success: false, message: 'Cannot transfer to same account' });
     }
 
-    db.getConnection((err, connection) => {
-        if (err) {
-            return res.json({ success: false, message: 'Connection error' });
+    const client = await db.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        const fromResult = await client.query(
+            'SELECT id, account_number, balance FROM accounts WHERE account_number = $1 FOR UPDATE',
+            [fromAccount]
+        );
+
+        if (fromResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Source account not found' });
         }
 
-        connection.beginTransaction(err => {
-            if (err) {
-                connection.release();
-                return res.json({ success: false, message: 'Transaction error' });
-            }
+        const from = fromResult.rows[0];
+        const fromBalance = parseFloat(from.balance);
 
-            // Lock and get source account
-            connection.query(
-                'SELECT id, account_number, balance FROM accounts WHERE account_number = ? FOR UPDATE',
-                [fromAccount],
-                (err, results) => {
-                    if (err || results.length === 0) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Source account not found' });
-                        });
-                    }
+        if (fromBalance < transferAmount) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Insufficient funds' });
+        }
 
-                    const from = results[0];
-                    const fromBalance = parseFloat(from.balance);
+        const toResult = await client.query(
+            'SELECT id, account_number, balance FROM accounts WHERE account_number = $1 FOR UPDATE',
+            [toAccount]
+        );
 
-                    // FIXED: Proper balance check
-                    if (fromBalance < transferAmount) {
-                        return connection.rollback(() => {
-                            connection.release();
-                            res.json({ success: false, message: 'Insufficient funds in source account' });
-                        });
-                    }
+        if (toResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.json({ success: false, message: 'Destination account not found' });
+        }
 
-                    // Lock and get destination account
-                    connection.query(
-                        'SELECT id, account_number, balance FROM accounts WHERE account_number = ? FOR UPDATE',
-                        [toAccount],
-                        (err, results) => {
-                            if (err || results.length === 0) {
-                                return connection.rollback(() => {
-                                    connection.release();
-                                    res.json({ success: false, message: 'Destination account not found' });
-                                });
-                            }
+        const to = toResult.rows[0];
+        const toBalance = parseFloat(to.balance);
 
-                            const to = results[0];
-                            const toBalance = parseFloat(to.balance);
+        const newFromBalance = fromBalance - transferAmount;
+        const newToBalance = toBalance + transferAmount;
 
-                            const newFromBalance = fromBalance - transferAmount;
-                            const newToBalance = toBalance + transferAmount;
+        await client.query('UPDATE accounts SET balance = $1 WHERE id = $2', [newFromBalance, from.id]);
+        await client.query('UPDATE accounts SET balance = $1 WHERE id = $2', [newToBalance, to.id]);
 
-                            // Update source
-                            connection.query(
-                                'UPDATE accounts SET balance = ? WHERE id = ?',
-                                [newFromBalance, from.id],
-                                (err) => {
-                                    if (err) {
-                                        return connection.rollback(() => {
-                                            connection.release();
-                                            res.json({ success: false, message: 'Transfer failed' });
-                                        });
-                                    }
+        await client.query(
+            'INSERT INTO transactions (from_account, to_account, amount, type, description) VALUES ($1, $2, $3, $4, $5)',
+            [fromAccount, toAccount, transferAmount, 'ADMIN_TRANSFER', description || 'Bank Officer Transfer']
+        );
 
-                                    // Update destination
-                                    connection.query(
-                                        'UPDATE accounts SET balance = ? WHERE id = ?',
-                                        [newToBalance, to.id],
-                                        (err) => {
-                                            if (err) {
-                                                return connection.rollback(() => {
-                                                    connection.release();
-                                                    res.json({ success: false, message: 'Transfer failed' });
-                                                });
-                                            }
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Transfer successful' });
 
-                                            // Log transaction
-                                            connection.query(
-                                                'INSERT INTO transactions (from_account, to_account, amount, type, description) VALUES (?, ?, ?, ?, ?)',
-                                                [fromAccount, toAccount, transferAmount, 'ADMIN_TRANSFER', description || 'Bank Officer Transfer'],
-                                                (err) => {
-                                                    if (err) {
-                                                        return connection.rollback(() => {
-                                                            connection.release();
-                                                            res.json({ success: false, message: 'Log failed' });
-                                                        });
-                                                    }
-
-                                                    connection.commit(err => {
-                                                        connection.release();
-                                                        if (err) {
-                                                            return res.json({ success: false, message: 'Commit failed' });
-                                                        }
-                                                        res.json({ success: true, message: 'Transfer successful' });
-                                                    });
-                                                });
-                                        });
-                                });
-                        });
-                });
-        });
-    });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.json({ success: false, message: 'Transfer failed' });
+    } finally {
+        client.release();
+    }
 });
 
 // Start server
-app.listen(3000, () => {
-    console.log('🏦 BankCore running at http://localhost:3000');
-    console.log('📝 Admin: admin1/admin123 | Customer: john/123456');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`🏦 BankCore running on port ${PORT}`);
 });
