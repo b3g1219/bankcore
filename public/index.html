@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏦 BankCore - Banking System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h2 {
+            color: #16213e;
+            margin-bottom: 20px;
+        }
+
+        h3 {
+            color: #0f3460;
+            margin-bottom: 15px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #0f3460;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: #000000;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #0f3460;
+        }
+
+        button {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-bottom: 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(15, 52, 96, 0.4);
+        }
+
+        button.secondary {
+            background: #6c757d;
+        }
+
+        button.success {
+            background: #28a745;
+        }
+
+        button.danger {
+            background: #dc3545;
+        }
+
+        .account-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .account-number {
+            font-size: 20px;
+            font-family: monospace;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .account-balance {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .account-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .account-actions button {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .account-actions button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .transaction-item {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            border-left: 4px solid #0f3460;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .transaction-credit {
+            border-left-color: #28a745;
+        }
+
+        .transaction-debit {
+            border-left-color: #dc3545;
+        }
+
+        .transaction-amount {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .amount-credit {
+            color: #28a745;
+        }
+
+        .amount-debit {
+            color: #dc3545;
+        }
+
+        .account-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .account-table th {
+            background: #1a1a2e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+
+        .account-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .account-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .badge-admin {
+            background: #ffc107;
+            color: #856404;
+        }
+
+        .badge-customer {
+            background: #17a2b8;
+            color: white;
+        }
+
+        .message {
+            padding: 12px 18px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .box {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .welcome-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-close {
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- ========== LOGIN SECTION ========== -->
+        <div id="authSection">
+            <h1>🏦 BankCore</h1>
+            <p style="color: #666; margin-bottom: 30px;">Multi-User Banking System</p>
+
+            <div class="box">
+                <h2>Login</h2>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username" value="john">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password" value="123456">
+                </div>
+                <button onclick="handleLogin()">Login</button>
+                <div id="loginMessage" class="message"></div>
+                <p style="margin-top: 20px; color: #888; font-size: 14px;">
+                    👑 Admin: admin1 / admin123<br>
+                    👤 Customer: john / 123456<br>
+                    👤 Customer: sarah / 123456
+                </p>
+            </div>
+        </div>
+
+        <!-- ========== DASHBOARD SECTION ========== -->
+        <div id="dashboardSection" class="hidden">
+            <div class="header">
+                <div class="welcome-section">
+                    <h1>🏦 BankCore</h1>
+                    <span id="roleBadge" class="badge"></span>
+                </div>
+                <div class="welcome-section">
+                    <span>Welcome, <strong id="welcomeUser"></strong>!</span>
+                    <button class="secondary" onclick="handleLogout()">Logout</button>
+                </div>
+            </div>
+
+            <!-- Customer Tabs -->
+            <div id="customerTabs" class="tabs hidden">
+                <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+                <button class="tab-btn" onclick="switchTab('transfer')">💸 Transfer</button>
+                <button class="tab-btn" onclick="switchTab('history')">📋 History</button>
+            </div>
+
+            <!-- Admin Tabs -->
+            <div id="adminTabs" class="tabs hidden">
+                <button class="tab-btn active" onclick="switchTab('adminTransfer')">🔧 Transfer Between
+                    Accounts</button>
+                <button class="tab-btn" onclick="switchTab('allAccounts')">💳 View All Accounts</button>
+            </div>
+
+            <!-- ========== CUSTOMER DASHBOARD TAB ========== -->
+            <div id="dashboardTab" class="tab-content active">
+                <h3>💳 My Account</h3>
+                <div id="accountInfo">
+                    <div class="loading">Loading account...</div>
+                </div>
+
+                <div style="margin-top: 30px;">
+                    <h3>📋 Recent Transactions</h3>
+                    <div id="recentTransactions">
+                        <div class="loading">Loading transactions...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========== CUSTOMER TRANSFER TAB ========== -->
+            <div id="transferTab" class="tab-content">
+                <div class="box">
+                    <h3>💸 Transfer Money</h3>
+                    <div class="form-group">
+                        <label>To Account Number</label>
+                        <input type="text" id="transferToAccount" placeholder="Enter recipient account number">
+                    </div>
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" id="transferAmount" placeholder="Enter amount" step="0.01" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <input type="text" id="transferDescription" placeholder="e.g., Payment">
+                    </div>
+                    <button onclick="handleTransfer()">Transfer Money</button>
+                    <div id="transferMessage" class="message"></div>
+                    <p style="margin-top: 15px; color: #666; font-size: 14px;">
+                        Other accounts: ACC2001, ACC3001, ACC4001
+                    </p>
+                </div>
+            </div>
+
+            <!-- ========== CUSTOMER HISTORY TAB ========== -->
+            <div id="historyTab" class="tab-content">
+                <div class="flex-between" style="margin-bottom: 20px;">
+                    <h3>📋 Transaction History</h3>
+                    <button onclick="loadTransactionHistory()">🔄 Refresh</button>
+                </div>
+                <div id="transactionHistory">
+                    <div class="loading">Loading history...</div>
+                </div>
+            </div>
+
+            <!-- ========== ADMIN TRANSFER TAB ========== -->
+            <div id="adminTransferTab" class="tab-content">
+                <div class="box">
+                    <h3>🔧 Transfer Between Customer Accounts</h3>
+                    <div class="form-group">
+                        <label>From Account Number</label>
+                        <select id="adminFromAccount">
+                            <option value="">Select source account...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>To Account Number</label>
+                        <select id="adminToAccount">
+                            <option value="">Select destination account...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount ($)</label>
+                        <input type="number" id="adminTransferAmount" placeholder="Enter amount" step="0.01" min="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label>Description (Optional)</label>
+                        <input type="text" id="adminTransferDescription" placeholder="e.g., Bank transfer">
+                    </div>
+                    <button onclick="handleAdminTransfer()">Execute Transfer</button>
+                    <div id="adminTransferMessage" class="message"></div>
+                </div>
+            </div>
+
+            <!-- ========== ADMIN ALL ACCOUNTS TAB ========== -->
+            <div id="allAccountsTab" class="tab-content">
+                <div class="flex-between" style="margin-bottom: 20px;">
+                    <h3>💳 All Customer Accounts</h3>
+                    <button onclick="loadAllAccounts()">🔄 Refresh</button>
+                </div>
+                <div id="allAccountsList">
+                    <div class="loading">Loading accounts...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deposit Modal -->
+    <div id="depositModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📥 Deposit Money</h3>
+                <span class="modal-close" onclick="closeModal('depositModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label>Amount ($)</label>
+                <input type="number" id="depositAmount" placeholder="Enter amount" step="0.01" min="0.01">
+            </div>
+            <button onclick="handleDeposit()">Deposit</button>
+            <div id="depositMessage" class="message"></div>
+        </div>
+    </div>
+
+    <!-- Withdraw Modal -->
+    <div id="withdrawModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📤 Withdraw Money</h3>
+                <span class="modal-close" onclick="closeModal('withdrawModal')">&times;</span>
+            </div>
+            <div class="form-group">
+                <label>Available Balance: <span id="availableBalance"></span></label>
+                <input type="number" id="withdrawAmount" placeholder="Enter amount" step="0.01" min="0.01">
+            </div>
+            <button onclick="handleWithdraw()">Withdraw</button>
+            <div id="withdrawMessage" class="message"></div>
+        </div>
+    </div>
+
+    <script>
+        // ========== GLOBAL VARIABLES ==========
+        let currentUser = null;
+        let userRole = null;
+        let myAccount = null;
+
+        // ========== INITIALIZATION ==========
+        document.addEventListener('DOMContentLoaded', () => {
+            checkSession();
+        });
+
+        async function checkSession() {
+            try {
+                const res = await fetch('/api/session');
+                const data = await res.json();
+
+                if (data.loggedIn) {
+                    currentUser = data;
+                    userRole = data.role;
+                    showDashboard();
+                }
+            } catch (err) {
+                console.error('Session check error:', err);
+            }
+        }
+
+        // ========== UI SWITCHING ==========
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            if (tab === 'dashboard') {
+                document.getElementById('dashboardTab').classList.add('active');
+            } else if (tab === 'transfer') {
+                document.getElementById('transferTab').classList.add('active');
+            } else if (tab === 'history') {
+                document.getElementById('historyTab').classList.add('active');
+                loadTransactionHistory();
+            } else if (tab === 'adminTransfer') {
+                document.getElementById('adminTransferTab').classList.add('active');
+                loadAdminTransferForm();
+            } else if (tab === 'allAccounts') {
+                document.getElementById('allAccountsTab').classList.add('active');
+                loadAllAccounts();
+            }
+        }
+
+        function showDashboard() {
+            document.getElementById('authSection').classList.add('hidden');
+            document.getElementById('dashboardSection').classList.remove('hidden');
+            document.getElementById('welcomeUser').textContent = currentUser.username;
+
+            const roleBadge = document.getElementById('roleBadge');
+
+            if (userRole === 'admin') {
+                roleBadge.textContent = 'Bank Officer';
+                roleBadge.className = 'badge badge-admin';
+                document.getElementById('adminTabs').classList.remove('hidden');
+                document.getElementById('customerTabs').classList.add('hidden');
+                loadAdminTransferForm();
+            } else {
+                roleBadge.textContent = 'Customer';
+                roleBadge.className = 'badge badge-customer';
+                document.getElementById('customerTabs').classList.remove('hidden');
+                document.getElementById('adminTabs').classList.add('hidden');
+                loadMyAccount();
+            }
+        }
+
+        // ========== AUTH FUNCTIONS ==========
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!username || !password) {
+                showMessage('loginMessage', 'Please enter username and password!', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    currentUser = data;
+                    userRole = data.role;
+                    showDashboard();
+                } else {
+                    showMessage('loginMessage', data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('loginMessage', 'Network error!', 'error');
+            }
+        }
+
+        async function handleLogout() {
+            await fetch('/api/logout', { method: 'POST' });
+            location.reload();
+        }
+
+        // ========== CUSTOMER FUNCTIONS ==========
+        async function loadMyAccount() {
+            try {
+                const res = await fetch('/api/my-account');
+                const data = await res.json();
+
+                if (data.success) {
+                    myAccount = data.account;
+                    displayAccount(data.account);
+                    loadRecentTransactions();
+                }
+            } catch (err) {
+                console.error('Failed to load account:', err);
+            }
+        }
+
+        function displayAccount(account) {
+            const html = `
+                <div class="account-card">
+                    <div class="account-number">${account.account_number}</div>
+                    <div class="account-balance">$${parseFloat(account.balance).toFixed(2)}</div>
+                    <div class="account-actions">
+                        <button onclick="openDepositModal()">📥 Deposit</button>
+                        <button onclick="openWithdrawModal()">📤 Withdraw</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('accountInfo').innerHTML = html;
+        }
+
+        async function loadRecentTransactions() {
+            try {
+                const res = await fetch('/api/transactions');
+                const data = await res.json();
+
+                if (data.success) {
+                    displayTransactions(data.transactions, 'recentTransactions');
+                }
+            } catch (err) {
+                console.error('Failed to load transactions:', err);
+            }
+        }
+
+        async function loadTransactionHistory() {
+            try {
+                const res = await fetch('/api/transactions');
+                const data = await res.json();
+
+                if (data.success) {
+                    displayTransactions(data.transactions, 'transactionHistory');
+                }
+            } catch (err) {
+                console.error('Failed to load history:', err);
+            }
+        }
+
+        function displayTransactions(transactions, containerId) {
+            if (!transactions || transactions.length === 0) {
+                document.getElementById(containerId).innerHTML = '<p>No transactions found</p>';
+                return;
+            }
+
+            const html = transactions.map(t => {
+                const isCredit = t.to_account === myAccount?.account_number;
+                const amountClass = isCredit ? 'amount-credit' : 'amount-debit';
+                const itemClass = isCredit ? 'transaction-credit' : 'transaction-debit';
+                const sign = isCredit ? '+' : '-';
+
+                return `
+                    <div class="transaction-item ${itemClass}">
+                        <div>
+                            <strong>${t.type}</strong><br>
+                            <small>${new Date(t.created_at).toLocaleString()}</small><br>
+                            <small>${t.description || ''}</small>
+                            ${t.from_account ? `<br><small>From: ${t.from_account}</small>` : ''}
+                            ${t.to_account ? `<br><small>To: ${t.to_account}</small>` : ''}
+                        </div>
+                        <div class="transaction-amount ${amountClass}">
+                            ${sign}$${parseFloat(t.amount).toFixed(2)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById(containerId).innerHTML = html;
+        }
+
+        function openDepositModal() {
+            document.getElementById('depositAmount').value = '';
+            document.getElementById('depositMessage').className = 'message';
+            document.getElementById('depositModal').classList.add('show');
+        }
+
+        function openWithdrawModal() {
+            document.getElementById('availableBalance').textContent = `$${parseFloat(myAccount.balance).toFixed(2)}`;
+            document.getElementById('withdrawAmount').value = '';
+            document.getElementById('withdrawMessage').className = 'message';
+            document.getElementById('withdrawModal').classList.add('show');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('show');
+        }
+
+        async function handleDeposit() {
+            const amount = document.getElementById('depositAmount').value;
+
+            if (!amount || amount <= 0) {
+                showMessage('depositMessage', 'Please enter a valid amount', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/deposit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showMessage('depositMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeModal('depositModal');
+                        loadMyAccount();
+                    }, 1500);
+                } else {
+                    showMessage('depositMessage', data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('depositMessage', 'Deposit failed!', 'error');
+            }
+        }
+
+        async function handleWithdraw() {
+            const amount = document.getElementById('withdrawAmount').value;
+
+            if (!amount || amount <= 0) {
+                showMessage('withdrawMessage', 'Please enter a valid amount', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/withdraw', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showMessage('withdrawMessage', data.message, 'success');
+                    setTimeout(() => {
+                        closeModal('withdrawModal');
+                        loadMyAccount();
+                    }, 1500);
+                } else {
+                    showMessage('withdrawMessage', data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('withdrawMessage', 'Withdrawal failed!', 'error');
+            }
+        }
+
+        async function handleTransfer() {
+            const toAccount = document.getElementById('transferToAccount').value;
+            const amount = document.getElementById('transferAmount').value;
+            const description = document.getElementById('transferDescription').value;
+
+            if (!toAccount || !amount || amount <= 0) {
+                showMessage('transferMessage', 'All fields required!', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ toAccount, amount, description })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showMessage('transferMessage', data.message, 'success');
+                    document.getElementById('transferToAccount').value = '';
+                    document.getElementById('transferAmount').value = '';
+                    document.getElementById('transferDescription').value = '';
+                    loadMyAccount();
+                } else {
+                    showMessage('transferMessage', data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('transferMessage', 'Transfer failed!', 'error');
+            }
+        }
+
+        // ========== ADMIN FUNCTIONS ==========
+        async function loadAdminTransferForm() {
+            try {
+                const res = await fetch('/api/admin/accounts');
+                const data = await res.json();
+
+                if (data.success) {
+                    const fromSelect = document.getElementById('adminFromAccount');
+                    const toSelect = document.getElementById('adminToAccount');
+
+                    fromSelect.innerHTML = '<option value="">Select source account...</option>';
+                    toSelect.innerHTML = '<option value="">Select destination account...</option>';
+
+                    data.accounts.forEach(acc => {
+                        const option1 = document.createElement('option');
+                        option1.value = acc.account_number;
+                        option1.textContent = `${acc.account_number} - ${acc.full_name} ($${parseFloat(acc.balance).toFixed(2)})`;
+                        fromSelect.appendChild(option1);
+
+                        const option2 = document.createElement('option');
+                        option2.value = acc.account_number;
+                        option2.textContent = `${acc.account_number} - ${acc.full_name}`;
+                        toSelect.appendChild(option2);
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to load accounts:', err);
+            }
+        }
+
+        async function loadAllAccounts() {
+            try {
+                const res = await fetch('/api/admin/accounts');
+                const data = await res.json();
+
+                if (data.success) {
+                    const html = `
+                        <table class="account-table">
+                            <thead>
+                                <tr>
+                                    <th>Account #</th>
+                                    <th>Owner</th>
+                                    <th>Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${data.accounts.map(a => `
+                                    <tr>
+                                        <td><strong>${a.account_number}</strong></td>
+                                        <td>${a.full_name} (${a.username})</td>
+                                        <td>$${parseFloat(a.balance).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    document.getElementById('allAccountsList').innerHTML = html;
+                }
+            } catch (err) {
+                console.error('Failed to load accounts:', err);
+            }
+        }
+
+        async function handleAdminTransfer() {
+            const fromAccount = document.getElementById('adminFromAccount').value;
+            const toAccount = document.getElementById('adminToAccount').value;
+            const amount = document.getElementById('adminTransferAmount').value;
+            const description = document.getElementById('adminTransferDescription').value;
+
+            if (!fromAccount || !toAccount || !amount || amount <= 0) {
+                showMessage('adminTransferMessage', 'All fields required!', 'error');
+                return;
+            }
+
+            if (fromAccount === toAccount) {
+                showMessage('adminTransferMessage', 'Cannot transfer to same account!', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fromAccount, toAccount, amount, description })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    showMessage('adminTransferMessage', data.message, 'success');
+                    document.getElementById('adminTransferAmount').value = '';
+                    document.getElementById('adminTransferDescription').value = '';
+                    loadAdminTransferForm();
+                } else {
+                    showMessage('adminTransferMessage', data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('adminTransferMessage', 'Transfer failed!', 'error');
+            }
+        }
+
+        // ========== UTILITY ==========
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = `message ${type} show`;
+            setTimeout(() => el.classList.remove('show'), 5000);
+        }
+
+        window.onclick = function (event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('show');
+            }
+        }
+    </script>
+</body>
+
+</html>
