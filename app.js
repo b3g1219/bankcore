@@ -28,13 +28,7 @@ const db = mysql.createPool({
 
 
 // Database connection - UPDATE THESE VALUES!
-const db = mysql.createPool({
-    host: 'mysql-berihu.alwaysdata.net',  // ← Your host from Step 2
-    user: 'berihu_admin',                  // ← Your user from Step 2
-    password: 'Heno%1219',                   // ← Your password from Step 2
-    database: 'berihu_banknew',               // ← Your database name
-    connectionLimit: 10
-});
+
 console.log('✅ Database pool created');
 
 // ============ ROUTES ============
